@@ -16,45 +16,31 @@ class ReservaService
     ) {}
 
     /**
-     * Crear reserva como cliente (requiere hold activo).
-     *
-     * @throws \Exception
+     * CREAR RESERVA DE CLIENTE (Desde la web pública)
      */
     public function crearReservaCliente(array $data, User $user): Reserva
     {
         return DB::transaction(function () use ($data, $user) {
-            // 1. Verificar que el usuario tiene un hold activo para esta mesa
-            $hold = MesaHold::where('mesa_id', $data['mesa_id'])
-                ->where('user_id', $user->id)
-                ->where('fecha', $data['fecha'])
-                ->where('expires_at', '>', now())
-                ->lockForUpdate()
-                ->first();
-
-            if (!$hold) {
-                throw new \Exception('El tiempo de reserva ha expirado. Por favor, selecciona la mesa nuevamente.');
-            }
-
-            // 2. Doble verificación de disponibilidad (con lock)
+            // 1. Verificar disponibilidad de la mesa en ese horario (evita reservas duplicadas)
             $conflicto = Reserva::where('mesa_id', $data['mesa_id'])
                 ->where('fecha', $data['fecha'])
                 ->where('estado_reserva', 'activa')
                 ->where('hora_inicio', '<', $data['hora_fin'])
                 ->where('hora_fin', '>', $data['hora_inicio'])
-                ->lockForUpdate()
+                ->lockForUpdate() // Bloquea la fila para evitar condiciones de carrera
                 ->exists();
 
             if ($conflicto) {
                 throw new \Exception('La mesa ya no está disponible para ese horario.');
             }
 
-            // 3. Verificar capacidad
+            // 2. Verificar que no se exceda la capacidad máxima de personas de la mesa
             $mesa = Mesa::findOrFail($data['mesa_id']);
             if ($data['cantidad_personas'] > $mesa->capacidad) {
                 throw new \Exception("La mesa solo tiene capacidad para {$mesa->capacidad} personas.");
             }
 
-            // 4. Crear reserva
+            // 3. Crear el registro de la reserva asociada al usuario
             $reserva = Reserva::create([
                 'mesa_id' => $data['mesa_id'],
                 'user_id' => $user->id,
@@ -71,20 +57,23 @@ class ReservaService
                 'confirmed_at' => now(),
             ]);
 
-            // 5. Eliminar hold
-            $hold->delete();
+            // 4. Eliminar el hold (bloqueo temporal) ya que la reserva se confirmó con éxito
+            MesaHold::where('mesa_id', $data['mesa_id'])
+                ->where('user_id', $user->id)
+                ->where('fecha', $data['fecha'])
+                ->delete();
 
             return $reserva;
         });
     }
 
     /**
-     * Crear reserva como administrador (sin necesidad de hold).
+     * CREAR RESERVA DE ADMINISTRADOR (Desde el panel de administración)
      */
     public function crearReservaAdmin(array $data): Reserva
     {
         return DB::transaction(function () use ($data) {
-            // Verificar disponibilidad con lock
+            // 1. Verificar disponibilidad de la mesa en ese horario
             $conflicto = Reserva::where('mesa_id', $data['mesa_id'])
                 ->where('fecha', $data['fecha'])
                 ->where('estado_reserva', 'activa')
@@ -97,12 +86,13 @@ class ReservaService
                 throw new \Exception('Esta mesa ya tiene una reserva activa para ese horario.');
             }
 
-            // Verificar capacidad
+            // 2. Verificar la capacidad de la mesa
             $mesa = Mesa::findOrFail($data['mesa_id']);
             if ($data['cantidad_personas'] > $mesa->capacidad) {
                 throw new \Exception("La mesa solo tiene capacidad para {$mesa->capacidad} personas.");
             }
 
+            // 3. Crear el registro de la reserva con los datos del administrador
             return Reserva::create([
                 'mesa_id' => $data['mesa_id'],
                 'user_id' => $data['user_id'] ?? null,
@@ -122,12 +112,12 @@ class ReservaService
     }
 
     /**
-     * Actualizar reserva existente (solo admin).
+     * ACTUALIZAR RESERVA EXISTENTE (Por un administrador)
      */
     public function actualizarReserva(Reserva $reserva, array $data): Reserva
     {
         return DB::transaction(function () use ($reserva, $data) {
-            // Solo verificar conflicto si cambió mesa, fecha u hora
+            // 1. Detectar si cambió de mesa, fecha u horario
             $cambioHorario = (
                 ($reserva->mesa_id != ($data['mesa_id'] ?? $reserva->mesa_id)) ||
                 ($reserva->fecha->format('Y-m-d') != ($data['fecha'] ?? $reserva->fecha->format('Y-m-d'))) ||
@@ -135,6 +125,7 @@ class ReservaService
                 ($reserva->hora_fin != ($data['hora_fin'] ?? $reserva->hora_fin))
             );
 
+            // 2. Si cambió el horario o mesa, comprobar que no choque con otra reserva existente
             if ($cambioHorario) {
                 $mesaId = $data['mesa_id'] ?? $reserva->mesa_id;
                 $fecha = $data['fecha'] ?? $reserva->fecha->format('Y-m-d');
@@ -146,7 +137,7 @@ class ReservaService
                     ->where('estado_reserva', 'activa')
                     ->where('hora_inicio', '<', $horaFin)
                     ->where('hora_fin', '>', $horaInicio)
-                    ->where('id', '!=', $reserva->id)
+                    ->where('id', '!=', $reserva->id) // Ignorar la reserva que estamos modificando
                     ->lockForUpdate()
                     ->exists();
 
@@ -155,7 +146,7 @@ class ReservaService
                 }
             }
 
-            // Verificar capacidad si cambió mesa o cantidad
+            // 3. Si cambió la mesa o la cantidad de personas, verificar capacidad
             if (isset($data['mesa_id']) || isset($data['cantidad_personas'])) {
                 $mesa = Mesa::findOrFail($data['mesa_id'] ?? $reserva->mesa_id);
                 $cantidad = $data['cantidad_personas'] ?? $reserva->cantidad_personas;
@@ -164,6 +155,7 @@ class ReservaService
                 }
             }
 
+            // 4. Guardar los cambios
             $reserva->update($data);
             return $reserva->fresh();
         });

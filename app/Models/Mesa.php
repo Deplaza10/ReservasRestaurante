@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Mesa extends Model
 {
+    // Campos que se pueden llenar masivamente
     protected $fillable = [
         'nombre',
         'capacidad',
@@ -24,6 +25,7 @@ class Mesa extends Model
         'numero_mesa',
     ];
 
+    // Formatear automáticamente campos a tipos nativos de PHP (boolean, float)
     protected function casts(): array
     {
         return [
@@ -36,57 +38,43 @@ class Mesa extends Model
         ];
     }
 
-    /**
-     * Relación: una mesa tiene muchas reservas.
-     */
+    // Relación: Una mesa puede tener muchas Reservas a lo largo del tiempo
     public function reservas(): HasMany
     {
         return $this->hasMany(Reserva::class);
     }
 
-    /**
-     * Relación: una mesa pertenece a una zona.
-     */
+    // Relación: Una mesa pertenece a una Zona específica (Ej: Terraza, Salón Principal)
     public function zona(): BelongsTo
     {
         return $this->belongsTo(Zona::class);
     }
 
-    /**
-     * Relación: una mesa tiene muchos holds temporales.
-     */
+    // Relación: Una mesa puede estar bloqueada temporalmente por varios Holds
     public function holds(): HasMany
     {
         return $this->hasMany(MesaHold::class);
     }
 
-    /**
-     * Holds activos (no expirados).
-     */
+    // Obtener los holds (bloqueos temporales) que todavía no han expirado
     public function activeHolds(): HasMany
     {
         return $this->holds()->active();
     }
 
-    /**
-     * Scope: solo mesas activas.
-     */
+    // Filtro rápido (Scope) para buscar solo mesas habilitadas/activas
     public function scopeActiva($query)
     {
         return $query->where('activa', true);
     }
 
-    /**
-     * Scope: mesas por zona.
-     */
+    // Filtro rápido (Scope) para buscar mesas dentro de una zona específica
     public function scopeEnZona($query, int $zonaId)
     {
         return $query->where('zona_id', $zonaId);
     }
 
-    /**
-     * Obtener datos para renderizar en el mapa (Konva.js).
-     */
+    // Formatear los datos de la mesa para poder dibujarla en el mapa interactivo (KonvaJS)
     public function toMapData(string $status = 'disponible'): array
     {
         return [

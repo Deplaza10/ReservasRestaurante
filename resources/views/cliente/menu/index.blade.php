@@ -119,24 +119,34 @@ document.addEventListener('alpine:init', () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({
                     items: this.items,
                     total: this.total
                 })
             })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) {
+                    return res.json().catch(() => ({})).then(data => {
+                        throw new Error(data.message || 'Error del servidor');
+                    });
+                }
+                return res.json();
+            })
             .then(data => {
                 this.loading = false;
                 if(data.success) {
-                    alert('Pedido enviado a la cocina. ¡En breve estará en tu mesa!');
+                    alert('¡Pedido enviado a la cocina! En breve estará en tu mesa.');
                     this.items = [];
+                } else {
+                    alert(data.message || 'Error al procesar el pedido');
                 }
             })
             .catch(err => {
                 this.loading = false;
-                alert('Error al enviar pedido');
+                alert('Error al enviar pedido: ' + err.message);
             });
         }
     }))

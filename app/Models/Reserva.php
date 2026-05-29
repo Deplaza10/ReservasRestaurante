@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Reserva extends Model
 {
+    // Campos que Laravel permite guardar de forma masiva (Mass Assignment)
     protected $fillable = [
         'mesa_id',
         'user_id',
@@ -23,6 +24,7 @@ class Reserva extends Model
         'confirmed_at',
     ];
 
+    // Convierte automáticamente campos de la base de datos a objetos de tipo fecha/tiempo
     protected function casts(): array
     {
         return [
@@ -31,67 +33,50 @@ class Reserva extends Model
         ];
     }
 
-    /**
-     * Relación: una reserva pertenece a una mesa.
-     */
+    // Relación: Una reserva pertenece a una Mesa específica
     public function mesa(): BelongsTo
     {
         return $this->belongsTo(Mesa::class);
     }
 
-    /**
-     * Relación: una reserva pertenece a un usuario.
-     */
+    // Relación: Una reserva pertenece a un Usuario (Cliente) específico
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Scope: solo reservas activas.
-     */
+    // Filtro rápido (Scope) para obtener únicamente las reservas que están activas
     public function scopeActiva($query)
     {
         return $query->where('estado_reserva', 'activa');
     }
 
-    /**
-     * Scope: reservas de una fecha específica.
-     */
+    // Filtro rápido (Scope) para obtener reservas de una fecha en específico
     public function scopeEnFecha($query, $fecha)
     {
         return $query->where('fecha', $fecha);
     }
 
-    /**
-     * Scope: reservas que se solapan con un rango horario dado.
-     * Algoritmo: nueva_inicio < existente_fin AND nueva_fin > existente_inicio
-     */
+    // Filtro para buscar si hay reservas que se cruzan/solapan en un rango de horas
     public function scopeSolapaCon($query, string $horaInicio, string $horaFin)
     {
         return $query->where('hora_inicio', '<', $horaFin)
                      ->where('hora_fin', '>', $horaInicio);
     }
 
-    /**
-     * Scope: reservas de un usuario.
-     */
+    // Filtro para obtener las reservas pertenecientes a un usuario en específico
     public function scopeDelUsuario($query, int $userId)
     {
         return $query->where('user_id', $userId);
     }
 
-    /**
-     * Verificar si la reserva está activa.
-     */
+    // Retorna verdadero si la reserva está activa
     public function isActiva(): bool
     {
         return $this->estado_reserva === 'activa';
     }
 
-    /**
-     * Verificar si la reserva está pagada.
-     */
+    // Retorna verdadero si la reserva ya fue pagada
     public function isPagada(): bool
     {
         return $this->estado_pago === 'pagada';

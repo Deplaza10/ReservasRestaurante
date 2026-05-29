@@ -94,12 +94,13 @@
                                 <span><i class="fas fa-th-large" style="margin-right: 5px; color: var(--text-muted);"></i> {{ ucfirst($mesa->tipo_mesa) }}</span>
                             </div>
 
+
                             <!-- Botón -->
                             @if($disponible)
-                                <a href="{{ route('cliente.reservar', $mesa) }}?fecha={{ $fecha }}&hora_inicio={{ request('hora_inicio') }}&hora_fin={{ request('hora_fin') }}" 
-                                   class="btn btn-primary" style="width: 100%; justify-content: center; padding: 12px;">
+                                <button onclick="reservarMesa({{ $mesa->id }}, '{{ $fecha }}', '{{ request('hora_inicio') }}', '{{ request('hora_fin') }}')" 
+                                   class="btn btn-primary btn-reservar-{{ $mesa->id }}" style="width: 100%; justify-content: center; padding: 12px;">
                                     <i class="fas fa-calendar-check"></i> Reservar Esta Mesa
-                                </a>
+                                </button>
                             @else
                                 <button disabled class="btn btn-outline" style="width: 100%; justify-content: center; padding: 12px; opacity: 0.4; cursor: not-allowed;">
                                     <i class="fas fa-lock"></i> No Disponible
@@ -134,4 +135,45 @@
         opacity: 0.85;
     }
 </style>
+
+<script>
+function reservarMesa(mesaId, fecha, horaInicio, horaFin) {
+    const btn = document.querySelector('.btn-reservar-' + mesaId);
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reservando...';
+    btn.disabled = true;
+
+    // Primero crear el hold temporal
+    fetch('/api/mesas/' + mesaId + '/hold', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+            fecha: fecha,
+            hora_inicio: horaInicio,
+            hora_fin: horaFin
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            // Hold creado, redirigir al formulario de reserva
+            window.location.href = '/cliente/reservar/' + mesaId + '?fecha=' + fecha + '&hora_inicio=' + horaInicio + '&hora_fin=' + horaFin;
+        } else {
+            alert(data.message || 'La mesa ya no está disponible. Por favor, intenta con otra mesa.');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    })
+    .catch(err => {
+        alert('Error al reservar la mesa. Inténtalo de nuevo.');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+</script>
 @endsection
+

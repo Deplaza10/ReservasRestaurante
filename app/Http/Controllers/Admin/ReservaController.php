@@ -98,7 +98,7 @@ class ReservaController extends Controller
     public function facturaPdf(Reserva $reserva)
     {
         $reserva->load(['mesa.zona', 'user']);
-        $pdf = Pdf::loadView('admin.reservas.factura', compact('reserva'));
+        $pdf = Pdf::loadView('reservas.factura', compact('reserva'));
         return $pdf->download("factura_reserva_{$reserva->id}.pdf");
     }
 }

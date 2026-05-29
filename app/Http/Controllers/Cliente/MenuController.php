@@ -43,9 +43,13 @@ class MenuController extends Controller
             ]);
         }
 
-        // Emitimos el evento a Reverb
+        // Emitimos el evento a Reverb (no falla si Reverb no está activo)
         $pedido->load('items.producto', 'user');
-        broadcast(new NuevoPedido($pedido));
+        try {
+            broadcast(new NuevoPedido($pedido));
+        } catch (\Exception $e) {
+            \Log::warning('No se pudo emitir evento de nuevo pedido: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true, 
